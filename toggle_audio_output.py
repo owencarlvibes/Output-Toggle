@@ -231,6 +231,17 @@ def _cmd_toggle() -> int:
 def main(argv: list[str] | None = None) -> int:
     _require_windows()
 
+    # Explicit COM init makes this more reliable across environments.
+    import comtypes
+
+    comtypes.CoInitialize()
+    try:
+        return _main_impl(argv)
+    finally:
+        comtypes.CoUninitialize()
+
+
+def _main_impl(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Toggle/set the default Windows 11 audio output device."
     )
