@@ -269,7 +269,208 @@ If Copilot's output needs adjustment:
 
 ---
 
-## 8. Common Issues and Fixes
+## 8. Power Automate Enhancements (Recommended)
+
+These additions will make your flow more robust:
+
+### 8.1 Duplicate Detection (Highly Recommended)
+
+Prevents creating duplicate entries if the same PO issue is emailed multiple times.
+
+**Add before "Create item":**
+
+1. **Action: Get items** (SharePoint)
+   - Site Address: [Your site]
+   - List Name: RERT
+   - Filter Query: `PO_x0020_Number eq 'varPONumber'`
+   - Top Count: 1
+
+2. **Action: Condition**
+   - If `length(body('Get_items')?['value'])` is equal to `0`
+   - Yes branch: Create the SharePoint item
+   - No branch: Skip (or update existing item, or send yourself a notification)
+
+**Copilot prompt addition:**
+```
+Before creating the SharePoint item, check if a record with this PO Number 
+already exists. Only create a new item if no existing record is found.
+```
+
+---
+
+### 8.2 Extract Buyer from Email (Recommended)
+
+Auto-populate who the issue was sent to.
+
+**Expression to get the To: recipient:**
+```
+first(triggerOutputs()?['body/toRecipients'])?['emailAddress/name']
+```
+
+Or for email address:
+```
+first(triggerOutputs()?['body/toRecipients'])?['emailAddress/address']
+```
+
+Add a **Buyer** or **Assigned To** column in SharePoint (Single line of text) and map this.
+
+---
+
+### 8.3 Mark Email as Read After Processing
+
+Gives you visual confirmation that an email was processed.
+
+**Add after "Create item":**
+
+1. **Action: Mark as read or unread (V3)**
+   - Message Id: `triggerOutputs()?['body/id']`
+   - Mark as: Read
+
+---
+
+### 8.4 Move Email to "Processed" Folder
+
+Keeps your intake folder clean.
+
+**Add after "Create item":**
+
+1. **Action: Move email (V2)**
+   - Message Id: `triggerOutputs()?['body/id']`
+   - Folder: RERT Processed (create this folder first)
+
+---
+
+### 8.5 Error Handling for Bad Format
+
+What if someone sends an email without "PO" in the subject?
+
+**Add after trigger, before any parsing:**
+
+1. **Action: Condition**
+   - If `contains(triggerOutputs()?['body/subject'], 'PO ')` is equal to `true`
+   - Yes branch: Continue with parsing
+   - No branch: Send yourself a notification or move to "Manual Review" folder
+
+**Expression for the condition:**
+```
+contains(triggerOutputs()?['body/subject'], 'PO ')
+```
+
+---
+
+### 8.6 Strip HTML from Email Body
+
+Email bodies often contain HTML tags. Use plain text preview instead.
+
+**Use this instead of body/body:**
+```
+triggerOutputs()?['body/bodyPreview']
+```
+
+This gives you the first ~255 characters as plain text. For longer issues, you may need to use `body/body` and strip HTML with:
+
+```
+replace(replace(replace(triggerOutputs()?['body/body'],'<br>','\n'),'</p>','\n'),'<[^>]+>','')
+```
+
+Note: Power Automate's replace doesn't support regex, so for heavy HTML stripping, use the **Html to text** action from the Content Conversion connector.
+
+---
+
+### 8.7 Notification When Item Created (Optional)
+
+Send yourself or the buyer a Teams/email confirmation.
+
+**Add after "Create item":**
+
+1. **Action: Send an email (V2)** or **Post message in a chat or channel**
+   - To: The buyer or yourself
+   - Subject: `New RERT Issue: @{variables('varPONumber')}`
+   - Body: `Issue logged: @{variables('varIssue')}`
+
+Only add this if people want notifications. Otherwise it's noise.
+
+---
+
+### 8.8 Validate PO is 10 Digits (Optional)
+
+Catches malformed PO numbers before they create bad data.
+
+**Expression to check length:**
+```
+and(
+  greaterOrEquals(length(variables('varPONumber')), 10),
+  lessOrEquals(length(variables('varPONumber')), 10)
+)
+```
+
+Or simpler - just check it's not empty:
+```
+greater(length(variables('varPONumber')), 0)
+```
+
+---
+
+### 8.9 Add Timestamp for Flow Run (Audit Trail)
+
+Add a column called **Created By Flow** (Date/Time) and populate it with:
+
+```
+utcNow()
+```
+
+This lets you distinguish items created by the flow vs. manually entered.
+
+---
+
+### Summary: Recommended Additions by Priority
+
+| Priority | Enhancement | Why |
+|----------|-------------|-----|
+| **High** | Duplicate detection | Prevents duplicate entries for same PO |
+| **High** | Error handling for bad format | Prevents flow failures |
+| **Medium** | Mark email as read | Visual confirmation of processing |
+| **Medium** | Extract buyer | Reduces manual backfill |
+| **Medium** | Strip HTML / use bodyPreview | Cleaner issue text |
+| **Low** | Move to processed folder | Keeps inbox clean |
+| **Low** | Notifications | Only if stakeholders want them |
+| **Low** | PO validation | Only if bad data is a real problem |
+
+---
+
+### Complete Enhanced Copilot Prompt
+
+If you want Copilot to build a more complete flow, use this expanded prompt:
+
+```
+When a new email arrives in my "RERT Intake" folder in Outlook:
+
+1. First check if the subject contains "PO ". If not, move the email to a 
+   folder called "RERT Manual Review" and stop.
+
+2. Extract the PO number from the email subject (the 10 digits after "PO ").
+
+3. Check my SharePoint list called "RERT" to see if a record with this 
+   PO Number already exists.
+
+4. If no existing record:
+   - Look for "MM:" in the email body and extract the number after it
+   - Look for "Issue:" in the email body and extract the text after it
+   - Get the name of the person in the To field
+   - Create a new item in the RERT list with:
+     - PO Number: the extracted PO
+     - MM Number: the extracted MM (or blank)
+     - Issue: the extracted issue text
+     - Buyer: the To recipient name
+     - First Email Received: the email received date
+     - Resolved: No
+
+5. After creating the item (or if duplicate found), mark the email as read.
+```
+
+---
+
+## 9. Common Issues and Fixes
 
 | Problem | Solution |
 |---------|----------|
