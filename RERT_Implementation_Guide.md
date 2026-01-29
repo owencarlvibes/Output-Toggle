@@ -470,15 +470,476 @@ When a new email arrives in my "RERT Intake" folder in Outlook:
 
 ---
 
-## 9. Common Issues and Fixes
+## 9. Common Issues and Fixes (Error Prevention Guide)
 
-| Problem | Solution |
-|---------|----------|
-| PO number has extra spaces | Wrap extraction in `trim()` |
-| Email body is HTML not plain text | Use `body/bodyPreview` instead of `body/body` for simpler parsing |
-| MM number not found | The `if(contains(...))` pattern handles this gracefully |
-| Flow runs on wrong emails | Check the folder filter in the trigger |
-| SharePoint item not created | Check your SharePoint connection and list name spelling |
+Power Automate is notorious for cryptic errors. Here's everything that typically breaks and the exact fixes.
+
+---
+
+### 9.1 SharePoint Column Internal Names
+
+**The #1 source of errors.** SharePoint display names ≠ internal names.
+
+| Display Name | Internal Name (use this in expressions) |
+|--------------|----------------------------------------|
+| PO Number | PO_x0020_Number |
+| MM Number | MM_x0020_Number |
+| VIM Document ID | VIM_x0020_Document_x0020_ID |
+| Buyer Notes | Buyer_x0020_Notes |
+| Vendor ID | Vendor_x0020_ID |
+| First Email Received Date | First_x0020_Email_x0020_Received_x0020_Date |
+| Resolved | Resolved |
+| Value | Value |
+| Issue | Issue |
+| Buyer | Buyer |
+
+**Rule:** Spaces become `_x0020_` in internal names.
+
+**How to find internal names:**
+1. Go to SharePoint list → Settings (gear) → List settings
+2. Click on the column name
+3. Look at the URL - the internal name is in `&Field=`
+
+**Or avoid this entirely:** Name your columns WITHOUT spaces when creating them:
+- `PONumber` instead of `PO Number`
+- `MMNumber` instead of `MM Number`
+- `FirstEmailDate` instead of `First Email Received Date`
+
+---
+
+### 9.2 Expression Syntax Errors
+
+**Error:** "The expression is invalid" or "Expected ','"
+
+**Common causes and fixes:**
+
+| Wrong | Right |
+|-------|-------|
+| `@triggerOutputs()` | `triggerOutputs()` (no @ inside expression box) |
+| `body('Get_items').value` | `body('Get_items')?['value']` |
+| `triggerOutputs().body.subject` | `triggerOutputs()?['body/subject']` |
+| `variables(varPONumber)` | `variables('varPONumber')` (quotes around name) |
+| `'PO Number'` in filter | `PO_x0020_Number` (internal name, no quotes around column) |
+| Missing `?` | Always use `?['field']` for null safety |
+
+**The `?` operator:** Always use `?['fieldname']` instead of `['fieldname']`. The `?` prevents errors when a field is null.
+
+---
+
+### 9.3 Complete Copy-Paste Expressions (Tested)
+
+These are the exact expressions to paste into the expression editor. Copy these character-for-character.
+
+**Extract PO Number from Subject:**
+```
+trim(replace(triggerOutputs()?['body/subject'],'PO ',''))
+```
+
+**Extract Issue from Body (with fallback):**
+```
+if(contains(coalesce(triggerOutputs()?['body/bodyPreview'],''),'Issue:'),trim(last(split(triggerOutputs()?['body/bodyPreview'],'Issue:'))),'See email for details')
+```
+
+**Extract MM Number (with fallback to empty):**
+```
+if(contains(coalesce(triggerOutputs()?['body/bodyPreview'],''),'MM:'),trim(first(split(substring(triggerOutputs()?['body/bodyPreview'],add(indexOf(triggerOutputs()?['body/bodyPreview'],'MM:'),3)),' '))),'')
+```
+
+**Get Buyer from To field:**
+```
+coalesce(first(triggerOutputs()?['body/toRecipients'])?['emailAddress/name'],'Unknown')
+```
+
+**Get Email Received Date:**
+```
+triggerOutputs()?['body/receivedDateTime']
+```
+
+**Get Email ID (for marking as read):**
+```
+triggerOutputs()?['body/id']
+```
+
+**Check if PO exists in subject:**
+```
+contains(coalesce(triggerOutputs()?['body/subject'],''),'PO ')
+```
+
+**Check if duplicate exists (after Get items):**
+```
+equals(length(body('Get_items')?['value']),0)
+```
+
+**Current timestamp:**
+```
+utcNow()
+```
+
+---
+
+### 9.4 Filter Query Syntax for SharePoint
+
+**Error:** "The filter query is not valid" or similar
+
+**Correct filter query syntax for "Get items":**
+
+For text columns:
+```
+PO_x0020_Number eq 'VALUE_HERE'
+```
+
+With a variable (use the expression editor, not dynamic content):
+```
+PO_x0020_Number eq '@{variables('varPONumber')}'
+```
+
+**But wait** - if you type that in the Filter Query box, you need to format it correctly:
+
+**In the Filter Query field, type this exactly:**
+```
+PO_x0020_Number eq '
+```
+Then click the lightning bolt (dynamic content) → Expression tab → type:
+```
+variables('varPONumber')
+```
+Then click OK, then type the closing:
+```
+'
+```
+
+**Or use Compose first:**
+1. Add a Compose action before Get items
+2. Expression: `concat('PO_x0020_Number eq ''', variables('varPONumber'), '''')`
+3. In Get items Filter Query, use the output of that Compose
+
+---
+
+### 9.5 Null and Empty Value Handling
+
+**Error:** "The template language function 'split' expects its first parameter to be of type string"
+
+**Cause:** The email body or field is null.
+
+**Fix:** Wrap values in `coalesce()`:
+
+| Wrong | Right |
+|-------|-------|
+| `split(triggerOutputs()?['body/body'],'Issue:')` | `split(coalesce(triggerOutputs()?['body/body'],''),'Issue:')` |
+| `length(variables('varPONumber'))` | `length(coalesce(variables('varPONumber'),''))` |
+
+**What coalesce does:** Returns the first non-null value. `coalesce(null, '')` returns `''`.
+
+---
+
+### 9.6 Data Type Mismatches
+
+**Error:** "The value 'xxx' is not a valid number" or "Expected type Boolean"
+
+| SharePoint Column Type | Expression Must Return |
+|-----------------------|----------------------|
+| Single line of text | String |
+| Number | Number (use `int()` or `float()`) |
+| Currency | Number (use `float()`) |
+| Yes/No | Boolean: `true` or `false` (not 'Yes'/'No') |
+| Date | ISO date string or `utcNow()` |
+| Person | Email address (if configured for email) |
+
+**For Yes/No (Resolved) column:**
+```
+false
+```
+Not `'No'`, not `'false'`, just: `false`
+
+**For Currency (Value) column - leave blank:**
+```
+null
+```
+Or just don't map it at all in Create item.
+
+---
+
+### 9.7 Action Reference Names
+
+**Error:** "The action 'Get_items' does not exist"
+
+Power Automate auto-names actions. If you renamed them or have duplicates:
+
+- `Get_items` might be `Get_items_2` or `Get_items_1`
+- `Compose` might be `Compose_2`
+- `Set_variable` might be `Set_variable_-_PO_Number`
+
+**How to find the real name:**
+1. Click on the action
+2. Click the `...` menu → Rename (to see current name)
+3. Or look at the action in code view (click `</>` in the top right)
+
+**Fix references accordingly:**
+```
+body('Get_items')?['value']     -- if action is named "Get items"
+body('Get_items_2')?['value']   -- if action is named "Get items 2"
+```
+
+---
+
+### 9.8 Trigger Issues
+
+**Error:** Flow never runs, or runs on wrong emails
+
+**Checklist:**
+1. Is the folder name spelled exactly right? (Case sensitive)
+2. Is it a subfolder? Use the folder picker, don't type the path
+3. Is it a shared mailbox? Use "When a new email arrives in a shared mailbox" trigger instead
+4. Is the flow turned ON? (Check the flow details page)
+5. Did you select the right Outlook account? (Check connection)
+
+**For shared mailbox trigger:**
+- Original Mailbox Address: `sharedmailbox@company.com`
+- Folder: Select from picker after entering mailbox
+
+---
+
+### 9.9 Connection and Authentication Errors
+
+**Error:** "The connection is not valid" or "Unauthorized"
+
+**Fixes:**
+1. Go to flow → Edit → Click on the failing action → Click "Change connection"
+2. Remove and re-add the connection
+3. Make sure you have permissions to the SharePoint list
+4. For shared mailboxes, ensure you have access rights
+
+---
+
+### 9.10 HTML Body Parsing Issues
+
+**Error:** Issue field contains `<div>`, `<br>`, or other HTML
+
+**The problem:** `body/body` returns HTML. `body/bodyPreview` returns plain text but truncated to ~255 chars.
+
+**Best solution for Issue field:**
+
+1. Add the **"Html to text"** action (from Content Conversion connector)
+   - Content: `triggerOutputs()?['body/body']`
+2. Use the output of that action for parsing
+
+**Or just use bodyPreview if issues are short:**
+```
+triggerOutputs()?['body/bodyPreview']
+```
+
+---
+
+### 9.11 Complete Flow Code View (JSON)
+
+If you want to import a working flow instead of building it, here's the flow definition you can paste into **Import from clipboard** (My flows → Import → Import from clipboard):
+
+Note: You'll need to update the SharePoint site URL and list GUID after import.
+
+```json
+{
+  "triggers": {
+    "When_a_new_email_arrives_in_RERT_Intake": {
+      "type": "OpenApiConnectionNotification",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['office365']['connectionId']"
+          }
+        },
+        "parameters": {
+          "folderPath": "RERT Intake",
+          "importance": "Any",
+          "fetchOnlyWithAttachment": false,
+          "includeAttachments": false
+        }
+      }
+    }
+  },
+  "actions": {
+    "Condition_-_Subject_Contains_PO": {
+      "type": "If",
+      "expression": {
+        "contains": [
+          "@coalesce(triggerOutputs()?['body/subject'],'')",
+          "PO "
+        ]
+      },
+      "actions": {
+        "Set_Variable_-_PO_Number": {
+          "type": "SetVariable",
+          "inputs": {
+            "name": "varPONumber",
+            "value": "@trim(replace(triggerOutputs()?['body/subject'],'PO ',''))"
+          }
+        },
+        "Set_Variable_-_Issue": {
+          "type": "SetVariable",
+          "inputs": {
+            "name": "varIssue",
+            "value": "@if(contains(coalesce(triggerOutputs()?['body/bodyPreview'],''),'Issue:'),trim(last(split(triggerOutputs()?['body/bodyPreview'],'Issue:'))),'See email for details')"
+          },
+          "runAfter": {
+            "Set_Variable_-_PO_Number": ["Succeeded"]
+          }
+        },
+        "Get_Existing_Items": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+              }
+            },
+            "method": "get",
+            "path": "/datasets/@{encodeURIComponent('YOUR_SITE_URL')}/tables/@{encodeURIComponent('YOUR_LIST_GUID')}/items",
+            "queries": {
+              "$filter": "PO_x0020_Number eq '@{variables('varPONumber')}'"
+            }
+          },
+          "runAfter": {
+            "Set_Variable_-_Issue": ["Succeeded"]
+          }
+        },
+        "Condition_-_No_Duplicate": {
+          "type": "If",
+          "expression": {
+            "equals": [
+              "@length(body('Get_Existing_Items')?['value'])",
+              0
+            ]
+          },
+          "actions": {
+            "Create_SharePoint_Item": {
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['sharepointonline']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/datasets/@{encodeURIComponent('YOUR_SITE_URL')}/tables/@{encodeURIComponent('YOUR_LIST_GUID')}/items",
+                "body": {
+                  "PO_x0020_Number": "@variables('varPONumber')",
+                  "Issue": "@variables('varIssue')",
+                  "First_x0020_Email_x0020_Received_x0020_Date": "@triggerOutputs()?['body/receivedDateTime']",
+                  "Resolved": false
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Get_Existing_Items": ["Succeeded"]
+          }
+        },
+        "Mark_Email_As_Read": {
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connection": {
+                "name": "@parameters('$connections')['office365']['connectionId']"
+              }
+            },
+            "method": "post",
+            "path": "/v2/Mail/MarkAsRead/@{encodeURIComponent(triggerOutputs()?['body/id'])}"
+          },
+          "runAfter": {
+            "Condition_-_No_Duplicate": ["Succeeded"]
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Move_To_Manual_Review": {
+            "type": "OpenApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['office365']['connectionId']"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail/Move/@{encodeURIComponent(triggerOutputs()?['body/id'])}",
+              "body": {
+                "destinationFolderPath": "RERT Manual Review"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Initialize_varPONumber": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [{
+          "name": "varPONumber",
+          "type": "string",
+          "value": ""
+        }]
+      },
+      "runAfter": {}
+    },
+    "Initialize_varIssue": {
+      "type": "InitializeVariable", 
+      "inputs": {
+        "variables": [{
+          "name": "varIssue",
+          "type": "string",
+          "value": ""
+        }]
+      },
+      "runAfter": {
+        "Initialize_varPONumber": ["Succeeded"]
+      }
+    }
+  }
+}
+```
+
+---
+
+### 9.12 Quick Reference Card
+
+Print this out or keep it handy:
+
+| What You Want | Expression |
+|---------------|------------|
+| Email subject | `triggerOutputs()?['body/subject']` |
+| Email body (HTML) | `triggerOutputs()?['body/body']` |
+| Email body (plain text) | `triggerOutputs()?['body/bodyPreview']` |
+| Email received time | `triggerOutputs()?['body/receivedDateTime']` |
+| Email ID | `triggerOutputs()?['body/id']` |
+| To recipient name | `first(triggerOutputs()?['body/toRecipients'])?['emailAddress/name']` |
+| From sender email | `triggerOutputs()?['body/from/emailAddress/address']` |
+| Variable value | `variables('variableName')` |
+| Action output | `body('Action_Name')` |
+| Array length | `length(body('Get_items')?['value'])` |
+| Current time | `utcNow()` |
+| Remove spaces | `trim(value)` |
+| Check contains | `contains(string,'substring')` |
+| Handle null | `coalesce(possiblyNull,'default')` |
+| Boolean true | `true` (no quotes) |
+| Boolean false | `false` (no quotes) |
+
+---
+
+### 9.13 Error Message Decoder
+
+| Error Message | Translation | Fix |
+|---------------|-------------|-----|
+| "The expression is invalid" | Syntax error in expression | Check quotes, brackets, `?` operators |
+| "Expected ',' or ')'" | Missing comma or paren | Count your parentheses |
+| "Cannot find template function" | Typo in function name | Check spelling: `coalesce` not `coelesce` |
+| "The action 'X' does not exist" | Wrong action reference name | Check actual action name in designer |
+| "Value cannot be null" | Required field is empty | Use `coalesce()` to provide default |
+| "The filter query is not valid" | Bad OData filter syntax | Use internal column names, check quotes |
+| "Expected type 'Boolean'" | Passing string to Yes/No field | Use `true`/`false` not `'Yes'`/`'No'` |
+| "Unauthorized" | Connection expired | Re-authenticate the connection |
+| "Resource not found" | Wrong SharePoint URL or list name | Verify site URL and list name |
+| "The 'split' expects string" | Null value passed to function | Wrap in `coalesce(value,'')` |
+
+---
 
 ---
 
