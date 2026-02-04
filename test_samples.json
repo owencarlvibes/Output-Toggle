@@ -1,0 +1,169 @@
+{
+  "description": "20 realistic email samples for MM number extraction testing",
+  "expected_mm_number": "1234567",
+  "samples": [
+    {
+      "id": 1,
+      "subject": "Issue PO 4900123445",
+      "body": "Hi Sheila,\nCan you confirm whether mm 1234567 has shipped yet?\nThanks,\nOwen",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900123445"]
+    },
+    {
+      "id": 2,
+      "subject": "RE: Issue PO 4900999999",
+      "body": "Following up on material MM1234567 from last week.\nLet me know when you can.",
+      "mm_format": "MM1234567",
+      "distractors": ["PO 4900999999"]
+    },
+    {
+      "id": 3,
+      "subject": "Issue PO 4900123001",
+      "body": "This is regarding item mm#1234567 tied to the order.\nAppreciate the update.",
+      "mm_format": "mm#1234567",
+      "distractors": ["PO 4900123001"]
+    },
+    {
+      "id": 4,
+      "subject": "Issue PO 4900555123",
+      "body": "Please check status for\nmaterial: mm 1234567\nNeed confirmation ASAP.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900555123"]
+    },
+    {
+      "id": 5,
+      "subject": "FWD: Issue PO 4900111111",
+      "body": "Vendor asked about MM: 1234567\nCan you confirm delivery?",
+      "mm_format": "MM: 1234567",
+      "distractors": ["PO 4900111111"]
+    },
+    {
+      "id": 6,
+      "subject": "Issue PO 4900666666",
+      "body": "Hey,\nWe are still waiting on mm-1234567\nThanks.",
+      "mm_format": "mm-1234567",
+      "distractors": ["PO 4900666666"]
+    },
+    {
+      "id": 7,
+      "subject": "Issue PO 4900777777",
+      "body": "Just checking in on mm 1234567, ordered 2 units.\nLet me know.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900777777", "2 units"]
+    },
+    {
+      "id": 8,
+      "subject": "Issue PO 4900888888",
+      "body": "Status request\nMaterial number MM 1234567\nPO above.",
+      "mm_format": "MM 1234567",
+      "distractors": ["PO 4900888888"]
+    },
+    {
+      "id": 9,
+      "subject": "Issue PO 4900123445",
+      "body": "We have multiple items but only mm 1234567 is outstanding.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900123445"]
+    },
+    {
+      "id": 10,
+      "subject": "Issue PO 4900456123",
+      "body": "Can you verify shipment of\nmm 1234567\nTracking pending.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900456123"]
+    },
+    {
+      "id": 11,
+      "subject": "Issue PO 4900000001",
+      "body": "Material mm 1234567 was due 01/15/2026.\nPlease advise.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900000001", "01/15/2026"]
+    },
+    {
+      "id": 12,
+      "subject": "Issue PO 4900987654",
+      "body": "Confirming if MM#1234567 is still on schedule.",
+      "mm_format": "MM#1234567",
+      "distractors": ["PO 4900987654"]
+    },
+    {
+      "id": 13,
+      "subject": "RE: Issue PO 4900123445",
+      "body": "Only following up on mm:1234567\nEverything else looks good.",
+      "mm_format": "mm:1234567",
+      "distractors": ["PO 4900123445"]
+    },
+    {
+      "id": 14,
+      "subject": "Issue PO 4900333444",
+      "body": "Hi,\nAny update on mm 1234567?\nThanks.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900333444"]
+    },
+    {
+      "id": 15,
+      "subject": "Issue PO 4900123000",
+      "body": "We received partial shipment.\nMissing: mm 1234567",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900123000"]
+    },
+    {
+      "id": 16,
+      "subject": "Issue PO 4900198765",
+      "body": "Material reference MM 1234567\nCan you confirm availability?",
+      "mm_format": "MM 1234567",
+      "distractors": ["PO 4900198765"]
+    },
+    {
+      "id": 17,
+      "subject": "Issue PO 4900543210",
+      "body": "Need ETA for mm 1234567\nBuyer is asking.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900543210"]
+    },
+    {
+      "id": 18,
+      "subject": "Issue PO 4900123445",
+      "body": "Just touching base on mm1234567\nPlease confirm.",
+      "mm_format": "mm1234567",
+      "distractors": ["PO 4900123445"]
+    },
+    {
+      "id": 19,
+      "subject": "Issue PO 4900666123",
+      "body": "Material mm 1234567 has not been confirmed yet.\nPlease advise.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900666123"]
+    },
+    {
+      "id": 20,
+      "subject": "Issue PO 4900123445",
+      "body": "This email concerns mm 1234567 only.\nNo action needed on other items.",
+      "mm_format": "mm 1234567",
+      "distractors": ["PO 4900123445"]
+    }
+  ],
+  "negative_test_cases": [
+    {
+      "id": "neg_1",
+      "subject": "Issue PO 4900999999",
+      "body": "PO 4900999999 was submitted on 01/15/2026",
+      "expected_result": "NO_MM_FOUND",
+      "reason": "No MM number present, only PO and date"
+    },
+    {
+      "id": "neg_2",
+      "subject": "Order Update",
+      "body": "Your order of 5 items has shipped. Tracking: 1Z999AA10123456784",
+      "expected_result": "NO_MM_FOUND",
+      "reason": "No MM number, only quantity and tracking number"
+    },
+    {
+      "id": "neg_3",
+      "subject": "Contact Info",
+      "body": "Call me at 555-123-4567 or email support@company.com",
+      "expected_result": "NO_MM_FOUND",
+      "reason": "Phone number should not be confused with MM number"
+    }
+  ]
+}
