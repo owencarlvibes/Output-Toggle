@@ -1,0 +1,130 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "description": "Extract MM numbers from incoming emails - ignores PO numbers, dates, phone numbers",
+  "parameters": {},
+  "triggers": {
+    "When_a_new_email_arrives": {
+      "type": "ApiConnectionNotification",
+      "inputs": {
+        "host": {
+          "connection": {
+            "name": "@parameters('$connections')['office365']['connectionId']"
+          }
+        },
+        "fetch": {
+          "method": "get",
+          "pathTemplate": {
+            "template": "/v2/Mail/OnNewEmail"
+          },
+          "queries": {
+            "folderPath": "Inbox",
+            "importance": "Any",
+            "fetchOnlyWithAttachment": false,
+            "includeAttachments": false
+          }
+        },
+        "subscribe": {
+          "method": "post",
+          "pathTemplate": {
+            "template": "/v2/Mail/OnNewEmailPoller"
+          },
+          "queries": {
+            "folderPath": "Inbox",
+            "importance": "Any",
+            "fetchOnlyWithAttachment": false,
+            "includeAttachments": false
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Initialize_MM_Number": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "MMNumber",
+            "type": "string",
+            "value": ""
+          }
+        ]
+      },
+      "runAfter": {}
+    },
+    "Initialize_Email_Content": {
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "EmailContent",
+            "type": "string",
+            "value": "@{concat(triggerOutputs()?['body/subject'], ' ', triggerOutputs()?['body/body'])}"
+          }
+        ]
+      },
+      "runAfter": {
+        "Initialize_MM_Number": ["Succeeded"]
+      }
+    },
+    "Extract_MM_Match": {
+      "type": "Compose",
+      "inputs": "@match(variables('EmailContent'), '(?i)mm[\\s:#-]?\\s*(\\d{7})')",
+      "runAfter": {
+        "Initialize_Email_Content": ["Succeeded"]
+      }
+    },
+    "Check_If_MM_Found": {
+      "type": "If",
+      "expression": {
+        "and": [
+          {
+            "not": {
+              "equals": ["@outputs('Extract_MM_Match')", "@null"]
+            }
+          },
+          {
+            "greater": ["@length(outputs('Extract_MM_Match'))", 0]
+          }
+        ]
+      },
+      "actions": {
+        "Set_MM_Number_Found": {
+          "type": "SetVariable",
+          "inputs": {
+            "name": "MMNumber",
+            "value": "@{last(first(outputs('Extract_MM_Match')))}"
+          }
+        }
+      },
+      "else": {
+        "actions": {
+          "Set_MM_Number_Not_Found": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "MMNumber",
+              "value": "NO_MM_FOUND"
+            }
+          }
+        }
+      },
+      "runAfter": {
+        "Extract_MM_Match": ["Succeeded"]
+      }
+    },
+    "Output_Result": {
+      "type": "Compose",
+      "inputs": {
+        "email_subject": "@triggerOutputs()?['body/subject']",
+        "email_from": "@triggerOutputs()?['body/from']",
+        "extracted_mm_number": "@variables('MMNumber')",
+        "extraction_timestamp": "@utcNow()"
+      },
+      "runAfter": {
+        "Check_If_MM_Found": ["Succeeded"]
+      }
+    }
+  },
+  "outputs": {}
+}

@@ -1,85 +1,75 @@
-# MM Number Extraction for Claude & Power Automate
+# MM Number Extraction for Power Automate
 
-This repository contains resources for extracting MM (Material Master) numbers from email content using Claude AI and Power Automate.
+Complete Power Automate solution for extracting MM (Material Master) numbers from emails.
 
-## Overview
+## Quick Start - Copy This Expression
 
-MM numbers are 7-digit material identifiers commonly found in procurement/supply chain emails. This solution provides:
+**Single expression that extracts MM number or returns "NO_MM_FOUND":**
 
-1. **Claude System Prompt** - Conditions Claude to accurately extract MM numbers while ignoring distractors
-2. **Regex Patterns** - Power Automate-compatible regular expressions
-3. **Test Samples** - 20 realistic email samples for validation
-4. **Python Validator** - Script to test regex patterns
-
-## Quick Start
-
-### Using the Claude System Prompt
-
-See `claude_system_prompt.md` for the complete system prompt. Key points:
-- Copy the prompt into your Claude API call as the `system` parameter
-- Claude will return only the 7-digit MM number or "NO_MM_FOUND"
-
-### Using Regex in Power Automate
-
-Primary pattern:
-```regex
-(?i)\bmm[\s:#-]?\s*(\d{7})\b
+```
+if(empty(match(concat(triggerOutputs()?['body/subject'], ' ', triggerOutputs()?['body/body']), '(?i)mm[\s:#-]?\s*(\d{7})')), 'NO_MM_FOUND', last(first(match(concat(triggerOutputs()?['body/subject'], ' ', triggerOutputs()?['body/body']), '(?i)mm[\s:#-]?\s*(\d{7})'))))
 ```
 
-Power Automate expression:
-```
-first(match(triggerOutputs()?['body/body'], '(?i)mm[\s:#-]?\s*(\d{7})'))
-```
+## Regex Pattern
 
-See `power_automate_regex.md` for detailed setup instructions.
+```
+(?i)mm[\s:#-]?\s*(\d{7})
+```
 
 ## Supported MM Formats
 
-The solution handles these MM number variations:
-- `mm 1234567` (space separator)
-- `MM1234567` (no separator)
-- `mm#1234567` (hash separator)
-- `MM: 1234567` (colon with space)
-- `mm-1234567` (hyphen separator)
-- `mm:1234567` (colon, no space)
+| Format | Example |
+|--------|---------|
+| Space separator | `mm 1234567` |
+| No separator | `MM1234567` |
+| Hash separator | `mm#1234567` |
+| Colon with space | `MM: 1234567` |
+| Hyphen separator | `mm-1234567` |
+| Colon no space | `mm:1234567` |
 
-## Distractors (Correctly Ignored)
+## Correctly Ignored (Distractors)
 
-- PO numbers (e.g., 4900123445)
-- Dates (e.g., 01/15/2026)
-- Phone numbers (e.g., 555-123-4567)
-- Quantities (e.g., "2 units")
+- PO numbers (4900123445)
+- Dates (01/15/2026)
+- Phone numbers (555-123-4567)
+- Quantities (2 units)
 - Tracking numbers
 
-## Running Tests
+## Power Automate Flow Setup
 
-```bash
-# Run all tests
-python3 mm_extractor.py
+### Option 1: Import Flow
+Import `power_automate_flow.json` directly into your tenant.
 
-# Run demo extraction
-python3 mm_extractor.py --demo
+### Option 2: Build Manually
+See `power_automate_expressions.md` for step-by-step instructions.
+
+## Key Expressions
+
+### Extract match from email body:
+```
+match(triggerOutputs()?['body/body'], '(?i)mm[\s:#-]?\s*(\d{7})')
 ```
 
-Expected output:
+### Get just the 7-digit number:
 ```
-Positive Tests: 20/20 passed
-Negative Tests: 3/3 passed
-Overall: 23/23 (100.0%)
+last(first(match(triggerOutputs()?['body/body'], '(?i)mm[\s:#-]?\s*(\d{7})')))
+```
+
+### Check if MM was found:
+```
+not(empty(match(triggerOutputs()?['body/body'], '(?i)mm[\s:#-]?\s*(\d{7})')))
 ```
 
 ## Files
 
 | File | Description |
 |------|-------------|
-| `claude_system_prompt.md` | Complete Claude system prompt with examples |
-| `power_automate_regex.md` | Regex patterns and Power Automate expressions |
-| `test_samples.json` | 20 email samples + 3 negative test cases |
-| `mm_extractor.py` | Python validation script |
+| `power_automate_flow.json` | Importable flow definition |
+| `power_automate_expressions.md` | All expressions with setup guide |
+| `test_samples.json` | 20 test emails + 3 negative cases |
+| `claude_system_prompt.md` | Optional: Claude AI prompt for extraction |
+| `mm_extractor.py` | Optional: Python validation script |
 
-## Integration Tips
+## Testing
 
-1. **Combine subject and body** - MM numbers may appear in either
-2. **Handle NO_MM_FOUND** - Include fallback logic in your flow
-3. **Log extractions** - Track which emails successfully extracted MM numbers
-4. **Test with real data** - Validate against your actual email formats
+All 20 sample emails correctly extract `1234567` while ignoring PO numbers, dates, and other distractors.
